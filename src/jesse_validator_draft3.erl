@@ -185,6 +185,9 @@ check_value(Value, [{?DISALLOW, Disallow} | Attrs], State) ->
 check_value(Value, [{?EXTENDS, Extends} | Attrs], State) ->
   NewState = check_extends(Value, Extends, State),
   check_value(Value, Attrs, NewState);
+check_value(Value, [{?_REF, Ref} | Attrs], State) ->
+  NewState = check_ref(Value, Ref, State),
+  check_value(Value, Attrs, NewState);
 check_value(_Value, [], State) ->
   State;
 check_value(Value, [_Attr | Attrs], State) ->
@@ -848,7 +851,9 @@ check_extends(Value, Extends, State) ->
     false ->
       case is_list(Extends) of
         true  -> check_extends_array(Value, Extends, State);
-        false -> State %% TODO: implement handling of $ref
+        false ->
+          %% TODO: implement handling of $ref
+          check_ref(Value, Extends, State)
       end
   end.
 
@@ -860,6 +865,93 @@ check_extends_array(Value, Extends, State) ->
              , State
              , Extends
              ).
+
+%% @doc 5.28.  $ref
+%% This attribute defines a URI of a schema that contains the full
+%% representation of this schema.  When a validator encounters this
+%% attribute, it SHOULD replace the current schema with the schema
+%% referenced by the value's URI (if known and available) and re-
+%% validate the instance.  This URI MAY be relative or absolute, and
+%% relative URIs SHOULD be resolved against the URI of the current
+%% schema.
+check_ref(Value, Ref, State) ->
+  my_log({Value, Ref, State}),
+  my_log("----------------------------"),
+  NewState = case get_schema(parse_relative_ref(Ref), State) of
+               {ok, []} ->
+                 %%FIXME: wat? this is root pointer ref right?
+                 State;
+               {error, unable_to_fetch_schema} ->
+                 State;
+               {ok, {Schema}} ->
+                 check_value(Value, Schema, State)
+             end,
+  my_log(NewState),
+  my_log("==============================="),
+  NewState.
+
+%%TODO: do we need to handle HTTPS too?
+parse_relative_ref(Ref) ->
+  case binary:split(Ref, [<<$/>>], [global]) of
+    [<<"#">>]             -> {self, [<<"#">>]};
+    [<<"#">> | Fragments] -> {self, Fragments};
+    [<<"http:">> | _]     -> {http, Ref};
+    [Fragments]           -> {local, Fragments}
+  end.
+
+get_schema({http, URI}, State) ->
+  Options = jesse_state:get_options(State),
+  ParserFun  = proplists:get_value(parser_fun, Options, fun(X) -> X end),
+  FetchFun  = proplists:get_value(fetch_fun, Options, fun fetch_schema/1),
+
+  [BAseURI | Fragments] =  binary:split(URI, [<<$#>>], [global]),
+  case FetchFun(binary_to_list(BAseURI)) of
+    {ok, Body} ->
+      {ok, get_schema_path(Fragments, ParserFun(Body))};
+    Error ->
+      Error
+  end;
+get_schema({self, Parts}, State) ->
+  %%TODO: handle self reference (JSON Reference) ?
+  %%TODO: handle reference to array by index (JSON Pointer)
+  OriginalSchema = jesse_state:get_original_schema(State),
+  %% my_log(OriginalSchema),
+  %% my_log(Parts),
+  %% my_log("----------------------------"),
+  {ok, get_schema_path(Parts, OriginalSchema)};
+get_schema({local, [First | _] = Parts}, _State) ->
+  case jesse_database:get_all() of
+    [] ->
+      {error, {schema_not_found, First}};
+    Schemas ->
+      case lists:filter(fun(Schema) -> Schema =:= First end, Schemas) of
+        [] ->
+          {error, {schema_not_found, First}};
+        Schema ->
+          {ok, get_schema_path(Parts, Schema)}
+      end
+  end.
+
+get_schema_path([], Schema) ->
+  Schema;
+get_schema_path([<<"#">>], Schema) ->
+  Schema;
+get_schema_path(Parts, Schema) when is_list(Parts) ->
+  Path = string:join([binary_to_list(B) || B <- Parts], "."),
+  jesse_json_path:path(Path, Schema).
+
+fetch_schema(URI) ->
+  case httpc:request(get, {URI, []}, [], []) of
+    {ok, {{_, 200, _}, _Headers, Response}} ->
+      {ok, Response};
+    _Other ->
+      {error, unable_to_fetch_schema}
+  end.
+
+my_log(What) ->
+ file:write_file("/tmp/ref.txt", io_lib:format("~p~n", [What]), [append]),
+ ok.
+
 
 %%=============================================================================
 %% @doc Returns `true' if given values (instance) are equal, otherwise `false'
