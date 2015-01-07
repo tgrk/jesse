@@ -27,9 +27,11 @@
         , get_allowed_errors/1
         , get_current_path/1
         , get_current_schema/1
+        , get_original_schema/1
         , get_default_schema_ver/1
         , get_error_handler/1
         , get_error_list/1
+        , get_options/1
         , new/2
         , remove_last_from_path/1
         , set_allowed_errors/2
@@ -49,6 +51,7 @@
          , error_list         :: list()
          , error_handler      :: fun((#state{}) -> list() | no_return())
          , default_schema_ver :: atom()
+         , options            :: jesse:options()
          }
        ).
 
@@ -79,6 +82,11 @@ get_current_path(#state{current_path = CurrentPath}) ->
 get_current_schema(#state{current_schema = CurrentSchema}) ->
   CurrentSchema.
 
+%% @doc Getter for `original_schema'.
+-spec get_original_schema(State :: state()) -> jesse:json_term().
+get_original_schema(#state{original_schema = OriginalSchema}) ->
+  OriginalSchema.
+
 %% @doc Getter for `default_schema_ver'.
 -spec get_default_schema_ver(State :: state()) -> binary().
 get_default_schema_ver(#state{default_schema_ver = SchemaVer}) ->
@@ -94,6 +102,11 @@ get_error_handler(#state{error_handler = ErrorHandler}) ->
 -spec get_error_list(State :: state()) -> list().
 get_error_list(#state{error_list = ErrorList}) ->
   ErrorList.
+
+%% @doc Getter for `options'.
+-spec get_options(State :: state()) -> jesse:options().
+get_options(#state{options = Options}) ->
+  Options.
 
 %% @doc Returns newly created state.
 -spec new( JsonSchema :: jesse:json_term()
@@ -120,6 +133,7 @@ new(JsonSchema, Options) ->
         , error_list         = []
         , error_handler      = ErrorHandler
         , default_schema_ver = DefaultSchemaVer
+        , options            = Options
         }.
 
 %% @doc Removes the last element from `current_path' in `State'.
