@@ -36,9 +36,11 @@
         ]).
 
 -export_type([ json_term/0
+             , options/0
              ]).
 
 -type json_term() :: term().
+-type options()   :: [{Key :: atom(), Data :: any()}].
 
 %%% API
 %% @doc Adds a schema definition `Schema' to in-memory storage associated with
@@ -56,7 +58,7 @@ add_schema(Key, Schema) ->
 %% a supported internal representation of json.
 -spec add_schema( Key       :: any()
                 , Schema    :: binary()
-                , Options   :: [{Key :: atom(), Data :: any()}]
+                , Options   :: options()
                 ) -> ok | jesse_error:error().
 add_schema(Key, Schema, Options) ->
   try
@@ -132,11 +134,13 @@ validate(Schema, Data) ->
 %% supported internal representation of json.
 -spec validate( Schema   :: any()
               , Data     :: json_term() | binary()
-              , Options  :: [{Key :: atom(), Data :: any()}]
+              , Options  :: options()
               ) -> {ok, json_term()}
                  | jesse_error:error().
 validate(Schema, Data, Options) ->
   try
+    ok = init_deps(Options),
+
     ParserFun  = proplists:get_value(parser_fun, Options, fun(X) -> X end),
     ParsedData = try_parse(data, ParserFun, Data),
     JsonSchema = jesse_database:read(Schema),
@@ -164,11 +168,13 @@ validate_with_schema(Schema, Data) ->
 %% to already be a supported internal representation of json.
 -spec validate_with_schema( Schema   :: json_term() | binary()
                           , Data     :: json_term() | binary()
-                          , Options  :: [{Key :: atom(), Data :: any()}]
+                          , Options  :: options()
                           ) -> {ok, json_term()}
                              | jesse_error:error().
 validate_with_schema(Schema, Data, Options) ->
   try
+    ok = init_deps(Options),
+
     ParserFun    = proplists:get_value(parser_fun, Options, fun(X) -> X end),
     ParsedSchema = try_parse(schema, ParserFun, Schema),
     ParsedData   = try_parse(data, ParserFun, Data),
@@ -190,6 +196,12 @@ try_parse(Type, ParserFun, JsonBin) ->
         schema -> throw({schema_error, {parse_error, Error}})
       end
   end.
+
+%%TODO: check if custom http client is used
+%%TODO: prevent reloading of already loaded stuff
+init_deps(_Options) ->
+  application:start(inets),
+  ok.
 
 %%% Local Variables:
 %%% erlang-indent-level: 2
