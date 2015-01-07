@@ -875,8 +875,8 @@ check_extends_array(Value, Extends, State) ->
 %% relative URIs SHOULD be resolved against the URI of the current
 %% schema.
 check_ref(Value, Ref, State) ->
-  my_log({Value, Ref, State}),
-  my_log("----------------------------"),
+  %% my_log({Value, Ref, State}),
+  %% my_log("----------------------------"),
   NewState = case get_schema(parse_relative_ref(Ref), State) of
                {ok, []} ->
                  %%FIXME: wat? this is root pointer ref right?
@@ -886,8 +886,8 @@ check_ref(Value, Ref, State) ->
                {ok, {Schema}} ->
                  check_value(Value, Schema, State)
              end,
-  my_log(NewState),
-  my_log("==============================="),
+  %% my_log(NewState),
+  %% my_log("==============================="),
   NewState.
 
 %%TODO: do we need to handle HTTPS too?
