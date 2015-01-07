@@ -948,9 +948,9 @@ fetch_schema(URI) ->
       {error, unable_to_fetch_schema}
   end.
 
-my_log(What) ->
- file:write_file("/tmp/ref.txt", io_lib:format("~p~n", [What]), [append]),
- ok.
+%% my_log(What) ->
+%%  file:write_file("/tmp/ref.txt", io_lib:format("~p~n", [What]), [append]),
+%%  ok.
 
 
 %%=============================================================================
