@@ -30,6 +30,7 @@
 %% API
 -export([ add/3
         , delete/1
+        , get_all/0
         , read/1
         , update/4
         ]).
@@ -89,6 +90,11 @@ delete(Key) ->
 update(Path, ParseFun, ValidationFun, MakeKeyFun) ->
   Schemas = load_schema(Path, get_updated_files(Path), ParseFun),
   store_schema(Schemas, ValidationFun, MakeKeyFun).
+
+%% @doc Get all storead schema definitions from in-memory storage
+-spec get_all() -> list(jesse:json_term()).
+get_all() ->
+  ets:tab2list(table_name()).
 
 %% @doc Reads a schema definition with the same key as `Key' from the internal
 %% storage. If there is no such key in the storage, an exception will be thrown.
