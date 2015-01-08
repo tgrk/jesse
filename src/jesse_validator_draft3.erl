@@ -930,7 +930,10 @@ get_schema({local, [First | _] = Parts}, _State) ->
         Schema ->
           {ok, get_schema_path(Parts, Schema)}
       end
-  end.
+  end;
+get_schema({local, Schema}, State) ->
+  get_schema({local, [Schema]}, State).
+
 
 get_schema_path([], Schema) ->
   Schema;
