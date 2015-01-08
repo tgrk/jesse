@@ -924,7 +924,7 @@ get_schema({local, [First | _] = Parts}, _State) ->
     [] ->
       {error, {schema_not_found, First}};
     Schemas ->
-      case lists:filter(fun(Schema) ->
+      case lists:filter(fun({Schema, _, _, _}) ->
                             Schema =:= binary_to_list(First) end, Schemas) of
         [] ->
           {error, {schema_not_found, First}};
