@@ -851,9 +851,7 @@ check_extends(Value, Extends, State) ->
     false ->
       case is_list(Extends) of
         true  -> check_extends_array(Value, Extends, State);
-        false ->
-          %% TODO: implement handling of $ref
-          check_ref(Value, Extends, State)
+        false -> check_ref(Value, Extends, State)
       end
   end.
 
@@ -874,23 +872,20 @@ check_extends_array(Value, Extends, State) ->
 %% validate the instance.  This URI MAY be relative or absolute, and
 %% relative URIs SHOULD be resolved against the URI of the current
 %% schema.
+%%TODO: check how we use jesse_state
+%%TODO: handle recursive self reference
 check_ref(Value, Ref, State) ->
-  %% my_log({Value, Ref, State}),
-  %% my_log("----------------------------"),
-  NewState = case get_schema(parse_relative_ref(Ref), State) of
-               {ok, []} ->
-                 %%FIXME: wat? this is root pointer ref right?
-                 State;
-               {error, unable_to_fetch_schema} ->
-                 State;
-               {ok, {Schema}} ->
-                 check_value(Value, Schema, State)
-             end,
-  %% my_log(NewState),
-  %% my_log("==============================="),
-  NewState.
+  Path = apply_reference_symbols(Ref),
+  case get_schema(parse_relative_ref(Path), State) of
+    {ok, []} ->
+      %%FIXME: wat? this is root pointer ref right?
+      State;
+    {error, unable_to_fetch_schema} ->
+      State;
+    {ok, {Schema}} ->
+      check_value(Value, Schema, State)
+  end.
 
-%%TODO: do we need to handle HTTPS too?
 parse_relative_ref(Ref) ->
   case binary:split(Ref, [<<$/>>], [global]) of
     [<<"#">>]             -> {self, [<<"#">>]};
@@ -912,20 +907,18 @@ get_schema({http, URI}, State) ->
       Error
   end;
 get_schema({self, Parts}, State) ->
-  %%TODO: handle self reference (JSON Reference) ?
-  %%TODO: handle reference to array by index (JSON Pointer)
   OriginalSchema = jesse_state:get_original_schema(State),
-  %% my_log(OriginalSchema),
-  %% my_log(Parts),
-  %% my_log("----------------------------"),
   {ok, get_schema_path(Parts, OriginalSchema)};
 get_schema({local, [First | _] = Parts}, _State) ->
   case jesse_database:get_all() of
     [] ->
       {error, {schema_not_found, First}};
     Schemas ->
-      case lists:filter(fun({Schema, _, _, _}) ->
-                            Schema =:= binary_to_list(First) end, Schemas) of
+      %% find schema id in cached schemas
+      PredFun = fun({Schema, _, _, _}) ->
+                    Schema =:= binary_to_list(First)
+                end,
+      case lists:filter(PredFun, Schemas) of
         [] ->
           {error, {schema_not_found, First}};
         Schema ->
@@ -935,14 +928,39 @@ get_schema({local, [First | _] = Parts}, _State) ->
 get_schema({local, Schema}, State) ->
   get_schema({local, [Schema]}, State).
 
-
 get_schema_path([], Schema) ->
   Schema;
 get_schema_path([<<"#">>], Schema) ->
   Schema;
 get_schema_path(Parts, Schema) when is_list(Parts) ->
-  Path = string:join([binary_to_list(B) || B <- Parts], "."),
-  jesse_json_path:path(Path, Schema).
+  %% first check if referencing element in list using index
+  Last = lists:last(Parts),
+  try
+    %%FIXME: this is a bit ugly solution
+    Index = binary_to_integer(Last),
+    PartialParts = lists:sublist(Parts, length(Parts) - 1),
+    Path = get_path(PartialParts),
+    Items = jesse_json_path:to_proplist(jesse_json_path:path(Path, Schema)),
+    case Index >= 0 andalso Index =< length(Items) of
+      true ->
+        [{Name, _}] = lists:nth(Index + 1, Items),
+        Value = jesse_json_path:path(get_path(PartialParts ++ [Name]), Schema),
+        {[{Name, Value}]};
+      _ ->
+        throw({error, invalid_array_index})
+    end
+  catch
+    _:_ ->
+      jesse_json_path:path(get_path(Parts), Schema)
+  end.
+
+%% Implement reference using ~0 and ~1
+apply_reference_symbols(Path) ->
+  binary:replace(binary:replace(Path, <<"~1">>, <<"/">>, [global]),
+                 <<"~0">>, <<"~">>, [global]).
+
+get_path(Parts) ->
+  string:join([binary_to_list(B) || B <- Parts], ".").
 
 fetch_schema(URI) ->
   case httpc:request(get, {URI, []}, [], []) of
@@ -952,10 +970,9 @@ fetch_schema(URI) ->
       {error, unable_to_fetch_schema}
   end.
 
-%% my_log(What) ->
-%%  file:write_file("/tmp/ref.txt", io_lib:format("~p~n", [What]), [append]),
-%%  ok.
-
+my_log(What) ->
+ file:write_file("/tmp/ref.txt", io_lib:format("~p~n", [What]), [append]),
+ ok.
 
 %%=============================================================================
 %% @doc Returns `true' if given values (instance) are equal, otherwise `false'
