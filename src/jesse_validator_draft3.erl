@@ -970,10 +970,6 @@ fetch_schema(URI) ->
       {error, unable_to_fetch_schema}
   end.
 
-my_log(What) ->
- file:write_file("/tmp/ref.txt", io_lib:format("~p~n", [What]), [append]),
- ok.
-
 %%=============================================================================
 %% @doc Returns `true' if given values (instance) are equal, otherwise `false'
 %% is returned.
