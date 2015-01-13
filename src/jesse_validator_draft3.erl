@@ -933,25 +933,25 @@ get_schema_path([], Schema) ->
 get_schema_path([<<"#">>], Schema) ->
   Schema;
 get_schema_path(Parts, Schema) when is_list(Parts) ->
-  %% first check if referencing element in list using index
-  Last = lists:last(Parts),
   try
-    %%FIXME: this is a bit ugly solution
-    Index = binary_to_integer(Last),
-    PartialParts = lists:sublist(Parts, length(Parts) - 1),
-    Path = get_path(PartialParts),
-    Items = jesse_json_path:to_proplist(jesse_json_path:path(Path, Schema)),
-    case Index >= 0 andalso Index =< length(Items) of
-      true ->
-        [{Name, _}] = lists:nth(Index + 1, Items),
-        Value = jesse_json_path:path(get_path(PartialParts ++ [Name]), Schema),
-        {[{Name, Value}]};
-      _ ->
-        throw({error, invalid_array_index})
-    end
+    maybe_get_by_index(Parts, Schema)
   catch
     _:_ ->
       jesse_json_path:path(get_path(Parts), Schema)
+  end.
+
+maybe_get_by_index(Parts, Schema) ->
+  Index = binary_to_integer(lists:last(Parts)),
+  PartialParts = lists:sublist(Parts, length(Parts) - 1),
+  Path = get_path(PartialParts),
+  Items = jesse_json_path:to_proplist(jesse_json_path:path(Path, Schema)),
+  case Index >= 0 andalso Index =< length(Items) of
+    true ->
+      [{Name, _}] = lists:nth(Index + 1, Items),
+      Value = jesse_json_path:path(get_path(PartialParts ++ [Name]), Schema),
+      {[{Name, Value}]};
+    _ ->
+      throw({error, invalid_array_index})
   end.
 
 %% Implement reference using ~0 and ~1
