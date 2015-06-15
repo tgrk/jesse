@@ -877,9 +877,6 @@ check_extends_array(Value, Extends, State) ->
 check_ref(Value, Ref, State) ->
   Path = apply_reference_symbols(Ref),
   case get_schema(parse_relative_ref(Path), State) of
-    {ok, []} ->
-      %%FIXME: wat? this is root pointer ref right?
-      State;
     {error, unable_to_fetch_schema} ->
       State;
     {ok, [{_, _, _, {Schema}}]} ->
