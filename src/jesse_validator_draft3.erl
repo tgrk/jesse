@@ -877,11 +877,10 @@ check_extends_array(Value, Extends, State) ->
 check_ref(Value, Ref, State) ->
   Path = apply_reference_symbols(Ref),
   case get_schema(parse_relative_ref(Path), State) of
-    {ok, []} ->
-      %%FIXME: wat? this is root pointer ref right?
-      State;
     {error, unable_to_fetch_schema} ->
       State;
+    {ok, [{_, _, _, {Schema}}]} ->
+      check_value(Value, Schema, State);
     {ok, {Schema}} ->
       check_value(Value, Schema, State)
   end.
@@ -925,8 +924,22 @@ get_schema({local, [First | _] = Parts}, _State) ->
           {ok, get_schema_path(Parts, Schema)}
       end
   end;
-get_schema({local, Schema}, State) ->
-  get_schema({local, [Schema]}, State).
+get_schema({local, SchemaName}, _State) ->
+  case jesse_database:get_all() of
+    [] ->
+      {error, {schema_not_found, SchemaName}};
+    Schemas ->
+      %% find schema id in cached schemas
+      PredFun = fun({Name, _, _, _}) ->
+                    Name =:= binary_to_list(SchemaName)
+                end,
+      case lists:filter(PredFun, Schemas) of
+        [] ->
+          {error, {schema_not_found, SchemaName}};
+        Schema ->
+          {ok, Schema}
+      end
+  end.
 
 get_schema_path([], Schema) ->
   Schema;
